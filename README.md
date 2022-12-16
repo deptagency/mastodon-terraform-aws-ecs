@@ -1,9 +1,39 @@
 
-Terraform scripts to create a Mastodon server in AWS Elastic Container Service (ECS).
+Terraform scripts to create a Mastodon server in AWS Elastic Container Service (ECS) using Fargate.
 
 Last tested with Mastodon version 4.0.2.
 
  Based upon original code from [mastodon-terraform](https://github.com/r7kamura/mastodon-terraform) by r7kamura as a basis.  From your friends at [DEPT® Agency](https://deptagency.com/service/engineering).
+
+
+# Architecture
+
+```mermaid
+C4Context      
+        System_Boundary(s1, "Elastic Container Service / Fargate") {
+            System(puma, "Mastodon Web App", "Ruby / Rails / Puma")
+            System(sidekiq, "Background Job processor", "Ruby / Sidekiq")
+            System(streaming, "Streaming API", "Node.js")
+        }
+
+        System_Boundary(s2, "Relational Database Service") {
+
+            SystemDb(postgres, "PostGresSQL Database")
+        }
+
+        System_Boundary(s3, "Elasticache") {
+
+            SystemQueue(redis, "Redis Datastore", "For background queue and caching")
+        }
+      
+      BiRel(puma, postgres, "")
+      BiRel(sidekiq, puma, "")
+      BiRel(sidekiq, redis, "")
+      BiRel(streaming, postgres, "")
+      BiRel(sidekiq, postgres, "")
+
+      UpdateLayoutConfig($c4ShapeInRow="1", $c4BoundaryInRow="4")
+```
 
 # Prereqs:
 
