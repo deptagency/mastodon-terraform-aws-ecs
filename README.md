@@ -1,80 +1,92 @@
-# mastodon-terraform
 
-Boilerplate for running [Mastodon](https://github.com/tootsuite/mastodon) on AWS using [Terraform](https://github.com/hashicorp/terraform) and [CircleCI](http://circleci.com/).
+Terraform scripts to create a Mastodon server in AWS Elastic Container Service (ECS) using Fargate.
 
-```
-┌---------------┐
-|  Web Browser  |
-└---------------┘
-▲               ▲
-|               |
-(HTTPS)         (WSS)
-|               |
-▼               |
-┌------------┐  |
-| CloudFront |  |
-└------------┘  |
-▲               |
-|               |
-(HTTP)          |
-|               |
-▼               ▼
-┌---------------┐
-|      ALB      |
-└---------------┘
-▲               ▲
-|               |
-(HTTP)          (WS)
-|               |
-▼               ▼
-┌------------------------┐
-| ┌-Docker-┐ ┌-Docker--┐ |
-| |  Puma  | | Express | |
-| └--------┘ └---------┘ |
-| ┌-Docker--┐            |
-| | Sidekiq |     EC2    |
-| └---------┘            |
-└------------------------┘
-▲                  ▲
-|                  |
-▼                  ▼
-┌----------------┐ ┌-------------┐
-| ┌------------┐ | |  ┌-------┐  |
-| | PostgreSQL | | |  | Redis |  |
-| └------------┘ | |  └-------┘  |
-|       RDS      | | Elasticache |
-└----------------┘ └-------------┘
+Last tested with Mastodon version 4.0.2.
+
+ Based upon original code from [mastodon-terraform](https://github.com/r7kamura/mastodon-terraform) by r7kamura as a basis.  From your friends at [DEPT® Agency](https://deptagency.com/service/engineering).
+
+
+# Architecture
+
+```mermaid
+C4Context      
+        System_Boundary(s1, "Elastic Container Service / Fargate") {
+            System(puma, "Mastodon Web App", "Ruby / Rails / Puma")
+            System(sidekiq, "Background Job processor", "Ruby / Sidekiq")
+            System(streaming, "Streaming API", "Node.js")
+        }
+
+        System_Boundary(s2, "Relational Database Service") {
+
+            SystemDb(postgres, "PostGresSQL Database")
+        }
+
+        System_Boundary(s3, "Elasticache") {
+
+            SystemQueue(redis, "Redis Datastore", "For background queue and caching")
+        }
+      
+      BiRel(puma, postgres, "")
+      BiRel(sidekiq, puma, "")
+      BiRel(sidekiq, redis, "")
+      BiRel(streaming, postgres, "")
+      BiRel(sidekiq, postgres, "")
+
+      UpdateLayoutConfig($c4ShapeInRow="1", $c4BoundaryInRow="4")
 ```
 
-## Usage
+# Prereqs:
 
-1. Fork this repository
-1. Enable CircleCI integration
-1. Set environment variables on CircleCI
-1. Run CircleCI job to create resources on AWS
-1. Build and push mastodon docker image via [mastodon-docker](https://github.com/r7kamura/mastodon-docker)
-1. Run `rails db:setup` by running custom ECS task on AWS console
+* [Terraform](https://www.terraform.io/)
+* The [AWS CLI](https://aws.amazon.com/cli/) installed and configured
+* An mail provider configured with smtp login, such as Simple Email Service from AWS.  (This setup isn't terraformed)
+* An AWS ACM Certificate setup in the us-east-1 region to use HTTPS.
 
-## Required environment variables
+# Running from scratch
 
+1. Create a certificate in ACM in the us-east-1 region, set the ARN to the `aws_acm_certificate_arn` variable in `terraform.tfvars`.
+1. Setup the values needed for the `TF_VAR_mastodon_otp_secret` and `TF_VAR_mastodon_secret_key` described in the environment variables section.
+1. Get the following secrets and run these commands to give Terraform the right secret and variable information, `.env.dummy` has them as well:
+```sh
+export AWS_DEFAULT_REGION=
+export AWS_ACCESS_KEY_ID=
+export TF_VAR_mastodon_otp_secret=
+export TF_VAR_mastodon_db_pass=
+export TF_VAR_mastodon_secret_key_base=
+export TF_VAR_mastodon_smtp_login=
+export TF_VAR_mastodon_smtp_password=
+```
+1. If you want a bastion host to access the database, set `bastion_enabled=true` in `terraform.tfvars`
+1. Set any IP's in a comma separated list of CIDR addresses for access through the bastion host to this env var:  `TF_VAR_bastion_cidrs`
+   a. Alternatively, you can run this command to find your IP and set it: `export TF_VAR_bastion_cidrs=$(curl -sq icanhazip.com)/32`
+1. Set any other information required in `terraform.tfvars` (see sections below for required values)
+1. Run `terraform plan` then `terraform apply`
+1. Then `docker pull tootsuite/mastodon`
+1. Go to the ECR Repo created and get the login commands, for instace `aws ecr get-login-password ... | docker login ...`
+1. Then push and tag the image: `docker tag tootsuite/mastodon:{{mastodon version}} {{your ecr repo endpoint}}:{{mastodon version}}`
+1. Set the `mastodon_docker_image_tag` in `terraform.tfvars` to your version of Mastodon you just tagged.
+1. You may need to reset the `mastodon_s3_cloudfront_host` after running the `terraform plan` command the first time.
+1. Run the `mastodon-rails-db-setup` task in the ECS console.  Make sure you choose the mastodon VPC, a public subnet and the DB security group.
+1. Run the `mastodon-rails-db-migration` task in the ECS console with the same settings as above
+1. Create an admin account: https://docs.joinmastodon.org/admin/setup/#admin
+1. Run the `mastodon_rails_mastodon_make_admin` task in the ECS console for the username.
+
+# Required environment variables
+
+### AWS_DEFAULT_REGION
+
+AWS region that the resources will be located in.
+
+e.g. `us-east-1`
 ### AWS_ACCESS_KEY_ID
 
 AWS IAM User access key ID for Terraform.
 
 e.g. `ABCDEFGHIJKLMNOPQRST`
 
-### AWS_DEFAULT_REGION
-
-AWS region that the resources will be located in.
-
-e.g. `ap-northeast-1`
-
 ### AWS_SECRET_ACCESS_KEY
 
 AWS IAM User secret access key for Terraform.
-
-e.g. `abcdefghijklmnopqrstuvwxyz0123456789/+AB`
-
 ### AWS_S3_BUCKET_TERRAFORM_STATE_NAME
 
 The domain that your terraform state file will be stored.
@@ -88,17 +100,25 @@ Where to locate the terraform state file on the specified AWS S3 bucket.
 
 e.g. `terraform.tfstate` (recommended)
 
-### TF_VAR_aws_s3_bucket_name
+### TF_VAR_mastodon_otp_secret
 
-A valid S3 bucket name for uploading files (e.g. user profile images).
+One-time password secret. Keep this safe.
 
-e.g. `my-mastodon`
+e.g. Generate a long random value like this:
 
-### TF_VAR_mastodon_s3_cloudfront_host
+```bash
+ruby -r securerandom -e "puts SecureRandom.hex(64)"
+```
 
-The domain for the CloudFront distribution where uploaded files will be provided from.
+### TF_VAR_mastodon_secret_key_base
 
-e.g. `cdn.example.com`
+The secret key base. Keep this safe.
+
+e.g. Generate a long random value like this:
+
+```bash
+ruby -r securerandom -e "puts SecureRandom.hex(64)"
+```
 
 ### TF_VAR_mastodon_db_pass
 
@@ -110,17 +130,47 @@ e.g. Generate a long random value like this:
 ruby -r securerandom -e "puts SecureRandom.hex(64)"
 ```
 
-### TF_VAR_mastodon_docker_image_tag
+### TF_VAR_mastodon_smtp_password
 
-Mastodon Docker image tag to detect which image to be deployed on ECS.
-If you are using [mastodon-docker](https://github.com/r7kamura/mastodon-docker) to build and push it to ECR,
-the CircleCI build number will be the Docker image tag.
+The password for your SMTP service.
+
+## Required values in `terraform.tfvars`
+
+In many instances, you'll want to see the [Mastodon Configuring Your Environment](https://docs.joinmastodon.org/admin/config/)
+page for a better description of these variables.  They are largely one for one.
+### aws_s3_bucket_name
+
+A valid S3 bucket name for uploading files (e.g. user profile images).
+
+e.g. `my-mastodon`
+
+### bastion_enabled
+
+Setup an EC2 Bastion server for accessing the database remotely.
+
+### bastion_ssh_key_name
+
+An SSH keypair name from the Ec2 Console for being able to access the baston host if `bastion_enabled` is true. 
+
+### mastodon_s3_cloudfront_host
+
+The domain for the CloudFront distribution where uploaded files will be provided from.
+
+e.g. `cdn.example.com`
+
+
+### mastodon_docker_image_tag
+
+Mastodon Docker image tag to detect which image to be deployed on ECS.  See instructions above on how to push. 
+The public docker repo will not work.
+
+Defaults to "v4.0.2"
 
 e.g. `123`
 
 Note: this variable is not required at the 1st time because we need to create ECR repository before building Mastodon Docker image.
 
-### TF_VAR_mastodon_docker_image_tag_rails_db_migration
+### mastodon_docker_image_tag_rails_db_migration
 
 Mastodon Docker image tag to detect which image to be deployed on ECS for `db:migrate` task.
 Why this value exists is because sometimes you may want to apply database migration before deploying new revision of application.
@@ -129,35 +179,16 @@ e.g. `124`
 
 Note: this variable is not required at the 1st time because we need to create ECR repository before building Mastodon Docker image.
 
-### TF_VAR_mastodon_local_domain
+### mastodon_local_domain
 
 The domain that your Mastodon instance will run on.
 
 e.g. `mastodon.example.com`
 
-### TF_VAR_mastodon_otp_secret
-
-One-time password secret
-
-e.g. Generate a long random value like this:
-
-```bash
-ruby -r securerandom -e "puts SecureRandom.hex(64)"
-```
-
-### TF_VAR_mastodon_secret_key_base
-
-The secret key base.
-
-e.g. Generate a long random value like this:
-
-```bash
-ruby -r securerandom -e "puts SecureRandom.hex(64)"
-```
 
 ## Optional environment variables
 
-### TF_VAR_aws_acm_certificate_arn
+### aws_acm_certificate_arn
 
 If you want to use HTTPS,
 create free SSL certificate for your domain on Amazon Certificate Manager on us-east-1 region,
@@ -165,7 +196,7 @@ then set its ARN to this environment variable.
 
 e.g. `arn:aws:acm:us-east-1:123456789012:certificate/12345678-90ab-cdef-1234-567890abcdef`
 
-### TF_VAR_aws_acm_certificate_arn_for_alb
+### aws_acm_certificate_arn_for_alb
 
 For using secure WebSocket connection,
 create free SSL certificate for your domain on Amazon Certificate Manager on your region,
@@ -173,7 +204,7 @@ then set its ARN to this environment variable too.
 
 e.g. `arn:aws:acm:ap-northeast-1:123456789012:certificate/12345678-90ab-cdef-1234-567890abcdef`
 
-### TF_VAR_aws_db_instance_mastodon_instance_class
+### aws_db_instance_mastodon_instance_class
 
 AWS RDS DB instance class.
 
@@ -181,43 +212,43 @@ default: `db.t2.micro`
 
 FYI: http://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.html.
 
-### TF_VAR_aws_ecs_task_definition_mastodon_node_streaming_memory
+### aws_ecs_task_definition_mastodon_node_streaming_memory
 
 Memory size for node_streaming ECS task.
 
 default: `300`
 
-### TF_VAR_aws_ecs_task_definition_mastodon_rails_db_migration_memory
+### aws_ecs_task_definition_mastodon_rails_db_migration_memory
 
 Memory size for rails_db_migration ECS task.
 
 default: `300`
 
-### TF_VAR_aws_ecs_task_definition_mastodon_rails_db_set_up_memory
+### aws_ecs_task_definition_mastodon_rails_db_set_up_memory
 
 Memory size for rails_db_set_up ECS task.
 
 default: `300`
 
-### TF_VAR_aws_ecs_task_definition_mastodon_rails_mastodon_make_admin_memory
+### aws_ecs_task_definition_mastodon_rails_mastodon_make_admin_memory
 
 Memory size for rails_mastodon_make_admin_memory ECS task.
 
 default: `300`
 
-### TF_VAR_aws_ecs_task_definition_mastodon_rails_puma_memory
+### aws_ecs_task_definition_mastodon_rails_puma_memory
 
 Memory size for rails_puma ECS task.
 
 default: `300`
 
-### TF_VAR_aws_ecs_task_definition_mastodon_rails_sidekiq_memory
+### aws_ecs_task_definition_mastodon_rails_sidekiq_memory
 
 Memory size for rails_sidekiq ECS task.
 
 default: `300`
 
-### TF_VAR_aws_elasticache_cluster_node_type
+### aws_elasticache_cluster_node_type
 
 AWS Elasticache Cluster node type.
 
@@ -225,7 +256,7 @@ default: `cache.t2.micro`
 
 FYI: https://aws.amazon.com/jp/elasticache/pricing/.
 
-### TF_VAR_aws_launch_configuration_mastodon_instance_type
+### aws_launch_configuration_mastodon_instance_type
 
 AWS EC2 instance type.
 
@@ -233,124 +264,103 @@ default: `t2.micro`
 
 FYI: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html.
 
-### TF_VAR_mastodon_administrator_name
+### mastodon_administrator_name
 
 Administrator user name for the `mastodon_rails_mastodon_make_admin` ECS task.
 
-### TF_VAR_mastodon_aws_access_key_id
+### mastodon_aws_access_key_id
 
 AWS IAM user access key ID for Rails to access to AWS API.
 
-### TF_VAR_mastodon_aws_secret_access_key
+### mastodon_aws_secret_access_key
 
 AWS IAM user secret access key for Rails to access to AWS API.
 
-### TF_VAR_mastodon_db_name
+### mastodon_db_name
 
 DB name.
 
 default: `mastodon`
 
-### TF_VAR_mastodon_db_user
+### mastodon_db_user
 
 DB user name.
 
 default: `root`
 
-### TF_VAR_mastodon_default_locale
+### mastodon_default_locale
 
 Default locale.
 
 default: `en`
 
-### TF_VAR_mastodon_email_domain_blacklist
+### mastodon_email_domain_blacklist
 
 Email domain blacklist.
 
-### TF_VAR_mastodon_email_domain_whitelist
+### mastodon_email_domain_whitelist
 
 Email domain whitelist.
 
-### TF_VAR_mastodon_node_streaming_api_base_url
+### mastodon_node_streaming_api_base_url
 
 The base URL of Streaming API endpoint.
 
 e.g. `https://mastodon-streaming.example.com:4000`
 
-### TF_VAR_mastodon_node_streaming_cluster_num
+### mastodon_node_streaming_cluster_num
 
 default: `1`
 
-### TF_VAR_mastodon_single_user_mode
+### mastodon_single_user_mode
 
 Should the instance run in single user mode? (Disable registrations, redirect to front page)
 
 default: `false`
 
+### mastodon_rails_log_level
+
+The logging level for the application. See mastodon docs for details.
+
 ### Others
 
-- `TF_VAR_mastodon_paperclip_root_path`
-- `TF_VAR_mastodon_paperclip_root_url`
-- `TF_VAR_mastodon_paperclip_secret`
-- `TF_VAR_mastodon_prepared_statements`
-- `TF_VAR_mastodon_smtp_auth_method`
-- `TF_VAR_mastodon_smtp_delivery_method`
-- `TF_VAR_mastodon_smtp_domain`
-- `TF_VAR_mastodon_smtp_enable_starttls_auto`
-- `TF_VAR_mastodon_smtp_from_address`
-- `TF_VAR_mastodon_smtp_login`
-- `TF_VAR_mastodon_smtp_openssl_verify_mode`
-- `TF_VAR_mastodon_smtp_password`
-- `TF_VAR_mastodon_smtp_port`
-- `TF_VAR_mastodon_smtp_server`
+- `mastodon_paperclip_root_path`
+- `mastodon_paperclip_root_url`
+- `mastodon_paperclip_secret`
+- `mastodon_prepared_statements`
+- `mastodon_smtp_auth_method`
+- `mastodon_smtp_delivery_method`
+- `mastodon_smtp_domain`
+- `mastodon_smtp_enable_starttls_auto`
+- `mastodon_smtp_from_address`
+- `mastodon_smtp_login`
+- `mastodon_smtp_openssl_verify_mode`
+- `mastodon_smtp_port`
+- `mastodon_smtp_server`
 
-## Resources
 
-This boilerplate will create the following resources:
+# Connecting to Mastodon Database Via Baston Host
 
-- module.mastodon.aws_alb_listener.mastodon_node_streaming:
-- module.mastodon.aws_alb_listener.mastodon_rails_puma:
-- module.mastodon.aws_alb_target_group.mastodon_node_streaming:
-- module.mastodon.aws_alb_target_group.mastodon_rails_puma:
-- module.mastodon.aws_alb.mastodon:
-- module.mastodon.aws_autoscaling_group.mastodon:
-- module.mastodon.aws_cloudfront_distribution.mastodon:
-- module.mastodon.aws_cloudwatch_log_group.mastodon:
-- module.mastodon.aws_db_instance.mastodon:
-- module.mastodon.aws_db_parameter_group.mastodon:
-- module.mastodon.aws_db_subnet_group.mastodon:
-- module.mastodon.aws_ecr_repository.mastodon:
-- module.mastodon.aws_ecs_cluster.mastodon:
-- module.mastodon.aws_ecs_service.mastodon_node_streaming:
-- module.mastodon.aws_ecs_service.mastodon_rails_puma:
-- module.mastodon.aws_ecs_service.mastodon_rails_sidekiq:
-- module.mastodon.aws_ecs_task_definition.mastodon_node_streaming:
-- module.mastodon.aws_ecs_task_definition.mastodon_rails_db_migration:
-- module.mastodon.aws_ecs_task_definition.mastodon_rails_db_set_up:
-- module.mastodon.aws_ecs_task_definition.mastodon_rails_puma:
-- module.mastodon.aws_ecs_task_definition.mastodon_rails_sidekiq:
-- module.mastodon.aws_elasticache_cluster.mastodon:
-- module.mastodon.aws_elasticache_subnet_group.mastodon:
-- module.mastodon.aws_iam_instance_profile.mastodon:
-- module.mastodon.aws_iam_policy_attachment.mastodon_ecs_ec2_instance:
-- module.mastodon.aws_iam_policy_attachment.mastodon_ecs_service:
-- module.mastodon.aws_iam_role.mastodon_ec2:
-- module.mastodon.aws_iam_role.mastodon_ecs:
-- module.mastodon.aws_internet_gateway.mastodon:
-- module.mastodon.aws_launch_configuration.mastodon:
-- module.mastodon.aws_route_table_association.mastodon_a:
-- module.mastodon.aws_route_table_association.mastodon_c:
-- module.mastodon.aws_route_table.mastodon:
-- module.mastodon.aws_security_group.mastodon_alb:
-- module.mastodon.aws_security_group.mastodon_db:
-- module.mastodon.aws_security_group.mastodon_elasticache:
-- module.mastodon.aws_security_group.mastodon_web:
-- module.mastodon.aws_subnet.mastodon_private_a:
-- module.mastodon.aws_subnet.mastodon_private_c:
-- module.mastodon.aws_subnet.mastodon_public_a:
-- module.mastodon.aws_subnet.mastodon_public_c:
-- module.mastodon.aws_vpc.mastodon:
+Create a Keypair in the EC2 Console.  Keep it safe and note the name.
 
-## Contributing
+Make sure IP's are whitelisted (see above for proper vars to set)
 
-Pull Requests are welcome if you found bugs or features you think are missing.
+Add this to ~/.ssh/config:
+
+```
+ Host mastodon-bastion
+   User ubuntu
+   Hostname [bastion host public IP from EC2 console]
+   IdentityFile ~/.ssh/[your private key from console]
+```
+
+Then `ssh mastodon-bastion`
+
+Find your database's hostname in the RDS console.
+
+You can then connect via an SSH tunnel like this:
+(see (this amazon article)[https://aws.amazon.com/premiumsupport/knowledge-center/rds-connect-using-bastion-host-linux/] for more detail):
+
+```sh
+ssh -f -N -L 5432:YOURDATABSEHOSTNAMEHERE.rds.amazonaws.com:5432 mastodon-bastion -v
+```

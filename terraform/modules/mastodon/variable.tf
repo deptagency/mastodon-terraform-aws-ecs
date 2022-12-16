@@ -1,12 +1,8 @@
 variable "aws_acm_certificate_arn" {}
 
-variable "aws_acm_certificate_arn_for_alb" {}
-
-variable "aws_autoscaling_group_desired_capacity" {}
-
-variable "aws_autoscaling_group_max_size" {}
-
-variable "aws_autoscaling_group_min_size" {}
+variable "aws_acm_certificate_arn_for_alb" {
+  default = ""
+}
 
 variable "aws_db_instance_mastodon_instance_class" {}
 
@@ -34,23 +30,35 @@ variable "aws_ecs_service_desired_count_rails_sidekiq" {}
 
 variable "aws_ecs_task_definition_mastodon_node_streaming_memory" {}
 
+variable "aws_ecs_task_definition_mastodon_node_streaming_cpu" {}
+
 variable "aws_ecs_task_definition_mastodon_rails_db_migration_memory" {}
+
+variable "aws_ecs_task_definition_mastodon_rails_db_migration_cpu" {}
 
 variable "aws_ecs_task_definition_mastodon_rails_db_set_up_memory" {}
 
+variable "aws_ecs_task_definition_mastodon_rails_db_set_up_cpu" {}
+
 variable "aws_ecs_task_definition_mastodon_rails_mastodon_make_admin_memory" {}
+
+variable "aws_ecs_task_definition_mastodon_rails_mastodon_make_admin_cpu" {}
 
 variable "aws_ecs_task_definition_mastodon_rails_puma_memory" {}
 
+variable "aws_ecs_task_definition_mastodon_rails_puma_cpu" {}
+
 variable "aws_ecs_task_definition_mastodon_rails_sidekiq_memory" {}
 
-variable "aws_elasticache_cluster_node_type" {}
+variable "aws_ecs_task_definition_mastodon_rails_sidekiq_cpu" {}
 
-variable "aws_launch_configuration_mastodon_instance_type" {}
+variable "aws_elasticache_cluster_node_type" {}
 
 variable "aws_resource_base_name" {}
 
 variable "aws_s3_bucket_name" {}
+
+variable "mastodon_alternate_domains" {}
 
 variable "mastodon_administrator_name" {}
 
@@ -86,6 +94,10 @@ variable "mastodon_paperclip_secret" {}
 
 variable "mastodon_prepared_statements" {}
 
+variable "mastodon_rails_log_level" {
+  default = "info"
+}
+
 variable "mastodon_s3_cloudfront_host" {}
 
 variable "mastodon_secret_key_base" {}
@@ -112,10 +124,12 @@ variable "mastodon_smtp_port" {}
 
 variable "mastodon_smtp_server" {}
 
+variable "mastodon_smtp_ssl" {}
+
 variable "mastodon_node_streaming_api_base_url" {}
 
 variable "mastodon_node_streaming_cluster_num" {}
 
 variable "mastodon_node_streaming_port" {
-  default = "4000"
+  default = 4000
 }
