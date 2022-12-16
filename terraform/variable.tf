@@ -1,25 +1,26 @@
+variable "aws_s3_bucket_terraform_state-name" {
+}
+
 variable "aws_acm_certificate_arn" {
-  default = ""
 }
 
 variable "aws_acm_certificate_arn_for_alb" {
+}
+
+variable "bastion_enabled" {
+  default = false
+}
+variable "bastion_cidrs" {
+  description = "Comma separated list of CIDR blocks to whitelist for bastion host.  Run export TF_VAR_bastion_cidrs=$(curl -sq icanhazip.com)/32 to get your IP. "
   default = ""
 }
 
-variable "aws_autoscaling_group_desired_capacity" {
-  default = 1
-}
-
-variable "aws_autoscaling_group_max_size" {
-  default = 1
-}
-
-variable "aws_autoscaling_group_min_size" {
-  default = 1
+variable "bastion_ssh_key_name" {
+  default = ""
 }
 
 variable "aws_db_instance_mastodon_instance_class" {
-  default = "db.t2.micro"
+  default = "db.t3.medium"
 }
 
 variable "aws_ecs_service_desired_count_node_streaming" {
@@ -35,35 +36,54 @@ variable "aws_ecs_service_desired_count_rails_sidekiq" {
 }
 
 variable "aws_ecs_task_definition_mastodon_node_streaming_memory" {
-  default = "300"
+  default = 512
+}
+
+variable "aws_ecs_task_definition_mastodon_node_streaming_cpu" {
+  default = 256
 }
 
 variable "aws_ecs_task_definition_mastodon_rails_db_migration_memory" {
-  default = "300"
+  default = 512
+}
+
+variable "aws_ecs_task_definition_mastodon_rails_db_migration_cpu" {
+  default = 256
 }
 
 variable "aws_ecs_task_definition_mastodon_rails_db_set_up_memory" {
-  default = "300"
+  default = 512
+}
+
+variable "aws_ecs_task_definition_mastodon_rails_db_set_up_cpu" {
+  default = 256
 }
 
 variable "aws_ecs_task_definition_mastodon_rails_mastodon_make_admin_memory" {
-  default = "300"
+  default = 512
+}
+variable "aws_ecs_task_definition_mastodon_rails_mastodon_make_admin_cpu" {
+  default = 256
 }
 
 variable "aws_ecs_task_definition_mastodon_rails_puma_memory" {
-  default = "300"
+  default = 512
+}
+
+variable "aws_ecs_task_definition_mastodon_rails_puma_cpu" {
+  default = 256
 }
 
 variable "aws_ecs_task_definition_mastodon_rails_sidekiq_memory" {
-  default = "300"
+  default = 512
+}
+
+variable "aws_ecs_task_definition_mastodon_rails_sidekiq_cpu" {
+  default = 256
 }
 
 variable "aws_elasticache_cluster_node_type" {
   default = "cache.t2.micro"
-}
-
-variable "aws_launch_configuration_mastodon_instance_type" {
-  default = "t2.micro"
 }
 
 variable "aws_resource_base_name" {
@@ -71,11 +91,10 @@ variable "aws_resource_base_name" {
 }
 
 variable "aws_s3_bucket_name" {
-  default = ""
 }
 
 variable "mastodon_administrator_name" {
-  default = ""
+  default = "mastodonadmin"
 }
 
 variable "mastodon_aws_access_key_id" {
@@ -101,11 +120,11 @@ variable "mastodon_default_locale" {
 }
 
 variable "mastodon_docker_image_tag" {
-  default = "dummy"
+  default = "v4.0.2"
 }
 
 variable "mastodon_docker_image_tag_rails_db_migration" {
-  default = "dummy"
+  default = "v4.0.2"
 }
 
 variable "mastodon_email_domain_blacklist" {
@@ -113,15 +132,22 @@ variable "mastodon_email_domain_blacklist" {
 }
 
 variable "mastodon_email_domain_whitelist" {
-  default = ""
 }
 
-variable "mastodon_local_domain" {}
+variable "mastodon_local_domain" {
+}
+
+variable "mastodon_alternate_domains" {
+}
 
 variable "mastodon_otp_secret" {}
 
 variable "mastodon_paperclip_root_path" {
   default = ":rails_root/public/system"
+}
+
+variable "mastodon_rails_log_level" {
+  default = "info"
 }
 
 variable "mastodon_paperclip_root_url" {
@@ -137,7 +163,6 @@ variable "mastodon_prepared_statements" {
 }
 
 variable "mastodon_s3_cloudfront_host" {
-  default = ""
 }
 
 variable "mastodon_secret_key_base" {}
@@ -184,6 +209,10 @@ variable "mastodon_smtp_port" {
 
 variable "mastodon_smtp_server" {
   default = ""
+}
+
+variable "mastodon_smtp_ssl" {
+  default = "true"
 }
 
 variable "mastodon_node_streaming_api_base_url" {

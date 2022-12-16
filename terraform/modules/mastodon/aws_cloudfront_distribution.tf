@@ -1,9 +1,17 @@
 resource "aws_cloudfront_distribution" "mastodon" {
-  aliases = ["${var.mastodon_local_domain}"]
-  comment = "mastodon"
-  enabled = true
+  aliases             = ["${var.mastodon_local_domain}"]
+  comment             = "mastodon main distribution"
+  enabled             = true
+  is_ipv6_enabled     = true
 
-  cache_behavior {
+  # Can add this in if you want
+  #logging_config {
+  #  include_cookies = false
+  #  bucket          = "yourlogging bucket.s3.amazonaws.com"
+  #  prefix          = "cloudfront-logs"
+  #}
+
+  ordered_cache_behavior {
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
     default_ttl            = 3600
@@ -21,7 +29,7 @@ resource "aws_cloudfront_distribution" "mastodon" {
         forward = "none"
       }
 
-      headers = ["CloudFront-Forwarded-Proto", "Origin"]
+      headers = ["CloudFront-Forwarded-Proto", "Origin", "Host"]
     }
   }
 
@@ -61,7 +69,7 @@ resource "aws_cloudfront_distribution" "mastodon" {
     custom_origin_config {
       http_port              = 80
       https_port             = 443
-      origin_protocol_policy = "http-only"
+      origin_protocol_policy = "${var.aws_acm_certificate_arn == "" ? "http-only" : "https-only"}"
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
@@ -75,14 +83,15 @@ resource "aws_cloudfront_distribution" "mastodon" {
   viewer_certificate {
     acm_certificate_arn            = "${var.aws_acm_certificate_arn}"
     cloudfront_default_certificate = "${var.aws_acm_certificate_arn == "" ? "1" : "0"}"
-    minimum_protocol_version       = "TLSv1"
+    minimum_protocol_version       = "TLSv1.2_2021"
     ssl_support_method             = "sni-only"
   }
 }
 
 resource "aws_cloudfront_distribution" "mastodon_file" {
-  aliases = ["${var.mastodon_s3_cloudfront_host}"]
-  comment = "${var.aws_resource_base_name}"
+  # TODO not using custom cname for this
+  # aliases = ["${var.mastodon_s3_cloudfront_host}"]
+  comment = "mastodon files distribution"
   enabled = true
 
   default_cache_behavior {
@@ -118,10 +127,16 @@ resource "aws_cloudfront_distribution" "mastodon_file" {
     }
   }
 
-  viewer_certificate {
-    acm_certificate_arn            = "${var.aws_acm_certificate_arn}"
-    cloudfront_default_certificate = "${var.aws_acm_certificate_arn == "" ? "1" : "0"}"
-    minimum_protocol_version       = "TLSv1"
-    ssl_support_method             = "sni-only"
-  }
+
+ # TODO not sure if we need this if we use default certificate
+ #viewer_certificate {
+ #  acm_certificate_arn            = "${var.aws_acm_certificate_arn}"
+ #  cloudfront_default_certificate = "${var.aws_acm_certificate_arn == "" ? "1" : "0"}"
+ #  minimum_protocol_version       = "TLSv1"
+ #  ssl_support_method             = "sni-only"
+ #}
+
+ viewer_certificate {
+   cloudfront_default_certificate = true
+ }
 }
