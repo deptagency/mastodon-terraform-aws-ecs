@@ -1,6 +1,3 @@
-variable "aws_s3_bucket_terraform_state-name" {
-}
-
 variable "aws_acm_certificate_arn" {
 }
 
