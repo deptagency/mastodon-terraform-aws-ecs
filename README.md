@@ -41,9 +41,10 @@ C4Context
 * The [AWS CLI](https://aws.amazon.com/cli/) installed and configured
 * An mail provider configured with smtp login, such as Simple Email Service from AWS.  (This setup isn't terraformed)
 * An AWS ACM Certificate setup in the us-east-1 region to use HTTPS.
-
+* An S3 bucket created to contain the terraform state
 # Running from scratch
 
+1. Copy `terraform.tfvars.example` to `terraform.tfvars`
 1. Create a certificate in ACM in the us-east-1 region, set the ARN to the `aws_acm_certificate_arn` variable in `terraform.tfvars`.
 1. Setup the values needed for the `TF_VAR_mastodon_otp_secret` and `TF_VAR_mastodon_secret_key` described in the environment variables section.
 1. Get the following secrets and run these commands to give Terraform the right secret and variable information, `.env.dummy` has them as well:
@@ -87,7 +88,7 @@ e.g. `ABCDEFGHIJKLMNOPQRST`
 ### AWS_SECRET_ACCESS_KEY
 
 AWS IAM User secret access key for Terraform.
-### AWS_S3_BUCKET_TERRAFORM_STATE_NAME
+### AWS_S3_BUCKET
 
 The domain that your terraform state file will be stored.
 To run Terraform from CircleCI, you need to prepare a private AWS S3 bucket to store your terraform state file.

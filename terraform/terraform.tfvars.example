@@ -1,0 +1,27 @@
+aws_acm_certificate_arn = "your cert ARN in us-east-1"
+aws_acm_certificate_arn_for_alb = "your ALB cert ARN for your region"
+
+aws_s3_bucket_name = "mastodonbucketname"
+bastion_enabled = "true"
+mastodon_docker_image_tag = "v4.0.2"
+
+bastion_ssh_key_name = "YourKeyPair"
+
+# note this one is comma separated
+mastodon_alternate_domains = ""
+
+# note this one is pipe separated
+mastodon_email_domain_whitelist ="yourcomain.com"
+mastodon_local_domain = "mastodon.yourdomain.com"
+# This will be created on first run
+mastodon_s3_cloudfront_host = "yourcloudfrontdistro.cloudfront.net"
+
+mastodon_smtp_auth_method = "plain"
+mastodon_smtp_delivery_method = "smtp"
+mastodon_smtp_domain = "yoursmptprovider.com"
+mastodon_smtp_enable_starttls_auto = "false"
+mastodon_smtp_from_address = "noreply@yourdomain.com"
+mastodon_smtp_port = "465"
+mastodon_smtp_server = "smtp.yoursmtpprovider.net"
+mastodon_smtp_ssl = "true"
+mastodon_smtp_openssl_verify_mode = "none"
